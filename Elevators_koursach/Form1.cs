@@ -30,11 +30,17 @@ namespace Elevators_koursach
         Random rand = new Random();
         List<List<Passenger>> awaitings = new List<List<Passenger>>();
         bool[] elevators_direction = new bool[2];
-        bool[] button_state = new bool[floors];
+        List<Button> floor_button = new List<Button>();
         List<int> elevator1_passengers = new List<int>();
         List<int> elevator2_passengers = new List<int>();
         int elevators_Capasity = 8;
         List<int> calls = new List<int>();
+        List<int> calls_el1 = new List<int>();
+        List<int> calls_el2 = new List<int>();
+        List<int> special_calls = new List<int>();
+        int special_call_for_el1 = 0;
+        int special_call_for_el2 = 0;
+        bool special_call_already_accept = false;
         uint summ_waiting_time = 0;
         uint[] average_waiting_time= new uint[2];
 
@@ -44,6 +50,8 @@ namespace Elevators_koursach
         bool generation_stopped = false;
 
         bool checker_2 = true;
+        int[] calls_capasity= new int[2];
+        bool moving = true;
 
 
 
@@ -163,7 +171,7 @@ namespace Elevators_koursach
             for (int i = 0; i < floors; i++)
             {
                 awaitings.Add(new List<Passenger>());
-                button_state[i] = false;
+                floor_button.Add(new Button(false, 0));
             }
             elevators_direction[0] = false;
             elevators_direction[1] = true;
@@ -184,10 +192,11 @@ namespace Elevators_koursach
             {
                 if (now <= Intervals1[i] && Counters1[i] > 0)
                 {
-                    if ((button_state[0] == false) && (i != 0))
+                    if ((floor_button[0].State == false) && (i != 0))
                     {
-                        button_state[0] = true;
-                        calls.Add(0);
+                        floor_button[0].State = true;
+                        if ((calls_el1.Contains(0) == false) && (calls_el2.Contains(0) == false))
+                            calls.Add(0);
                     }
 
                     label1.Text += Convert.ToString(i) + ": ";
@@ -217,10 +226,12 @@ namespace Elevators_koursach
                 {
                     if (now <= Intervals[i] && Counters[z, i] > 0)
                     {
-                        if ((button_state[z + 1] == false) && (i != 0))
+                        if ((floor_button[z + 1].State == false) && (i != 0) )
                         {
-                            button_state[z + 1] = true;
-                            calls.Add(z + 1);
+                            floor_button[z + 1].State = true;
+                            if((calls_el1.Contains(z + 1) == false) && (calls_el2.Contains(z + 1) == false))
+                                calls.Add(z + 1);
+                            
                         }
 
                         label1.Text += Convert.ToString(i) + ": ";
@@ -236,43 +247,62 @@ namespace Elevators_koursach
                 }
 
             }
+            listFromMaxToMin(calls);
 
         }
 
         private void timer3_Tick(object sender, EventArgs e)
         {
+           
             label4.Text = "Ожидающие пассажиры\r\n";
             for (int j = 0; j < floors; j++)//вывод ожидающих пассажиров
             {
-                //label4.ForeColor = Color.Black;
                 label4.Text += Convert.ToString(j + 1) + ": ";
-                if ((awaitings[j].Count != 0) && (button_state[j] == false))
+                if ((awaitings[j].Count != 0) && (floor_button[j].State == false))
                 {
-                    button_state[j] = true;
-                    calls.Add(j);
+                    floor_button[j].State = true;
+                    if((calls_el1.Contains(j) == false) && (calls_el2.Contains(j) == false))
+                        calls.Add(j);
                 }
 
                 for (int i = 0; i < awaitings[j].Count; i++)
                 {
                     awaitings[j][i].Waiting_time++;
 
-                    //if (awaitings[j][i].Waiting_time < 15)//идея классная но не реализуется(
-                    //    label4.ForeColor=Color.Green;
-                    //else
-                    //{
-                     //   if (awaitings[j][i].Waiting_time > 30)
-                     //       label4.ForeColor = Color.Red;
-                     //   else
-                   //         label4.ForeColor = Color.Yellow;
-                   // }
-                    //label4.ForeColor = Color.Green;
-
                     label4.Text += Convert.ToString(awaitings[j][i].Destination) + " ";
 
                 }
                 label4.Text += "\r\n";
 
+                if (floor_button[j].State == true)
+                    floor_button[j].State_true_time++;
+                if (floor_button[j].State_true_time > 25 && !special_calls.Contains(j))
+                {
+                    special_calls.Add(j);
+                    listFromMaxToMin(special_calls);
+                    
+                }
+
             }
+            listFromMaxToMin(calls);
+
+            label12.Text = " ";
+            for (int i = 0; i < calls.Count; i++)
+                label12.Text += Convert.ToString(calls[i]) + " ";
+
+            label10.Text = " ";
+            for (int i = 0; i < calls_el1.Count; i++)
+                label10.Text += Convert.ToString(calls_el1[i]) + " ";
+
+            label11.Text = " ";
+            for (int i = 0; i < calls_el2.Count; i++)
+                label11.Text += Convert.ToString(calls_el2[i]) + " ";
+
+            label13.Text = " ";
+            //for (int i = 0; i < special_calls.Count; i++)
+              //  label13.Text += Convert.ToString(special_calls[i] + " ");
+
+
         }
 
         private void timer2_Tick(object sender, EventArgs e)
@@ -282,28 +312,278 @@ namespace Elevators_koursach
             label9.Text = "Время работы:\r\n" + Convert.ToString(system_time) + " сек";
             bool boarding_state_1 = false, boarding_state_2 = false;
             bool landing_1 = false, landing_2 = false;
-            if (button_state.Contains(true) || (elevator1_passengers.Count>0) ||(elevator2_passengers.Count>0))
+            bool change = false;
+            bool button_clicked = false;
+            bool special_moving_1 = false, special_moving_2 = false;
+            for (int i = 0; i < floor_button.Count; i++)
             {
-                if (elevator1_passengers.Count == 0 && calls.Count>0)
+                if (floor_button[i].State == true)
                 {
+                    button_clicked = true;
+                    break;
+                }
+            }
 
 
-                    if (calls[0] < trackBar1.Value)
-                        elevators_direction[0] = true;
-                    else
+            if (button_clicked || (elevator1_passengers.Count>0) ||(elevator2_passengers.Count>0))
+            {
+                
+                if (elevator1_passengers.Count == 0 )
+                {
+                    if (calls.Count > 0)
                     {
-                        if (calls[0] > trackBar1.Value)
-                            elevators_direction[0] = false;
+
+
+                        if (special_calls.Count > 0 && !special_call_already_accept)
+                        {
+                            special_moving_1 = true;
+                            if (special_call_for_el1 == 0 && special_calls[0] != 0)
+                            {
+                                special_call_for_el1 = special_calls[0];
+                            }
+                            else
+                            {
+                                if (special_call_for_el1 < trackBar1.Value )
+                                    elevators_direction[0] = true;
+                                
+                                else
+                                {
+                                    if (special_call_for_el1 > trackBar1.Value )
+                                    {
+                                        //label13.Text += "?";
+                                        elevators_direction[0] = false;
+                                    }
+                                        
+                                    else
+                                    {
+                                        boarding_1();
+                                        boarding_state_1 = true;
+                                        special_moving_1 = false;
+                                        special_call_for_el1 = 0;
+                                    }
+                                }
+                            }
+                        }
                         else
                         {
-                            boarding_1();
-                            boarding_state_1 = true;
+
+
+                            if (calls_el1.Count == 0)
+                            {//создание вызовов
+
+
+                                calls_el1.Add(calls[0]);
+                                label10.Text = Convert.ToString(calls[0]) + " ";
+                                calls.RemoveAt(0);
+                                if (calls.Count > 1)
+                                {
+                                    calls_el1.Add(calls[0]);
+                                    label10.Text += Convert.ToString(calls[0]) + " ";
+                                    calls.RemoveAt(0);
+                                    if (calls.Count > 2)
+                                    {
+                                        calls_el1.Add(calls[0]);
+                                        label10.Text += Convert.ToString(calls[0]) + " ";
+                                        calls.RemoveAt(0);
+                                        //calls_capasity[0] = 3;
+                                    }
+                                    //else
+                                        //calls_capasity[0] = 2;
+                                }
+                                //else
+                                    //calls_capasity[0] = 1;
+
+
+                            }
+                            else//обновление вызовов
+                            {
+                                if (calls_el2.Count > 0)
+                                {
+
+
+                                    if ((Math.Abs(calls_el2[0] - trackBar1.Value) < Math.Abs(calls_el2[0] - trackBar2.Value)) && (Math.Abs(calls_el2[0] - trackBar1.Value) < Math.Abs(calls_el1[0] - trackBar1.Value)))
+                                    {
+                                        List<int> cross = new List<int>(calls_el1);
+                                        calls_el1 = new List<int>(calls_el2);
+                                        calls_el2 = new List<int>(cross);
+                                        change = true;
+                                    }
+                                
+
+                                    if (elevators_direction[0] == false)
+                                    {
+                                        if (calls_el1[0] > calls_el2[0])
+                                        {
+
+
+                                            int cntr = 0;
+                                            int marker_1 = calls_el1[0];
+                                            while (marker_1 < calls[0])//index out of range
+                                            {
+
+                                                calls_el1.Insert(0, calls[0]);
+                                                calls.RemoveAt(0);
+                                                if (calls_el1.Count == 4)
+                                                {
+                                                    calls.Add(calls_el1[calls_el1.Count - 1]);
+                                                    calls_el1.RemoveAt(calls_el1.Count - 1);
+                                                }
+                                                cntr++;
+                                                if (cntr == 3 || calls.Count == 0)
+                                                    break;
+
+
+                                            }
+                                        }
+                                        else
+                                        {
+                                            for (int i = 0; i < calls.Count; i++)
+                                            {
+                                                if (calls[i] < calls_el2[calls_el2.Count - 1])
+                                                {
+                                                    int cntr = 0;
+                                                    int marker_1 = calls_el1[0];
+                                                    while (marker_1 < calls[i])
+                                                    {
+
+                                                        calls_el1.Insert(0, calls[i]);
+                                                        calls.RemoveAt(i);
+                                                        if (calls_el1.Count == 4)
+                                                        {
+                                                            calls.Add(calls_el1[calls_el1.Count - 1]);
+                                                            calls_el1.RemoveAt(calls_el1.Count - 1);
+                                                        }
+                                                        cntr++;
+                                                        if (cntr == 3 || calls.Count == i)
+                                                            break;
+
+
+                                                    }
+                                                    break;
+                                                }
+                                            }
+                                        }
+
+
+                                    }
+                                    else
+                                    {
+                                        for (int i = 0; i < calls.Count; i++)
+                                        {
+                                            if (calls[i] < trackBar1.Value + 1)
+                                            {
+                                                int cntr = 0;
+                                                int marker_1 = calls_el1[0];
+                                                while (marker_1 < calls[i])
+                                                {
+
+                                                    calls_el1.Insert(0, calls[i]);
+                                                    calls.RemoveAt(i);
+                                                    if (calls_el1.Count == 4)
+                                                    {
+                                                        calls.Add(calls_el1[calls_el1.Count - 1]);
+                                                        calls_el1.RemoveAt(calls_el1.Count - 1);
+                                                    }
+                                                    cntr++;
+                                                    if (cntr == 3 || calls.Count == i)
+                                                        break;
+
+
+                                                }
+                                                break;
+                                            }
+                                        }
+                                    }
+                                    listFromMaxToMin(calls_el1);
+                                    listFromMaxToMin(calls);
+
+                                    //label10.Text = " ";
+                                    //for(int i=0;i<calls_el1.Count; i++)
+                                    //    label10.Text+=Convert.ToString(calls_el1[i])+" ";
+
+                                }
+                                else
+                                {
+                                    if (elevators_direction[0] == false)
+                                    {
+                                        int cntr = 0;
+                                        int marker_1 = calls_el1[0];
+                                        while (marker_1 < calls[0])//index out of range
+                                        {
+
+                                            calls_el1.Insert(0, calls[0]);
+                                            calls.RemoveAt(0);
+                                            if (calls_el1.Count == 4)
+                                            {
+                                                calls.Add(calls_el1[calls_el1.Count - 1]);
+                                                calls_el1.RemoveAt(calls_el1.Count - 1);
+                                            }
+                                            cntr++;
+                                            if (cntr == 3 || calls.Count == 0)
+                                                break;
+
+
+                                        }
+                                    }
+                                    else
+                                    {
+                                        for (int i = 0; i < calls.Count; i++)
+                                        {
+                                            if (calls[i] < trackBar1.Value + 1)
+                                            {
+                                                int cntr = 0;
+                                                int marker_1 = calls_el1[0];
+                                                while (marker_1 < calls[i])
+                                                {
+
+                                                    calls_el1.Insert(0, calls[i]);
+                                                    calls.RemoveAt(i);
+                                                    if (calls_el1.Count == 4)
+                                                    {
+                                                        calls.Add(calls_el1[calls_el1.Count - 1]);
+                                                        calls_el1.RemoveAt(calls_el1.Count - 1);
+                                                    }
+                                                    cntr++;
+                                                    if (cntr == 3 || calls.Count == i)
+                                                        break;
+
+
+                                                }
+                                                break;
+                                            }
+                                        }
+                                    }
+                                    listFromMaxToMin(calls_el1);
+                                    listFromMaxToMin(calls);
+
+                                }
+
+                            }
+
+
+                          
                         }
                     }
-
+                    if (calls_el1.Count > 0 && !special_moving_1)
+                    {
+                        if (calls_el1[0] < trackBar1.Value)
+                            elevators_direction[0] = true;
+                        else
+                        {
+                            if (calls_el1[0] > trackBar1.Value)
+                                elevators_direction[0] = false;
+                            else
+                            {
+                                boarding_1();
+                                boarding_state_1 = true;
+                            }
+                        }
+                    }
                 }
                 else
                 {
+                    if(elevator1_passengers.Count==0)
+                        moving = false;
                     label7.Text = "";
                     if (elevator1_passengers.Contains(trackBar1.Value + 1))
                     {
@@ -320,11 +600,14 @@ namespace Elevators_koursach
                         }
 
                     }
-                    int debil = rand.Next(1, 6);
+                    //int debil = rand.Next(1, 6);
                     //|| (elevators_direction[0]==false && landing_1==true)) пассажиры не садятся в лифт в другую сторону?
-                    if (button_state[trackBar1.Value] == true && (elevator1_passengers.Count < elevators_Capasity)
-                        && (elevators_direction[0] == true || (elevators_direction[0] == false && landing_1 == true && (debil % 5 == 0 || elevator1_passengers.Count==0))))
-                    {
+                    if (floor_button[trackBar1.Value].State == true && (elevator1_passengers.Count < elevators_Capasity)
+                        && (elevators_direction[0] == true && 
+                        (calls_el2.Contains(trackBar1.Value) == false || trackBar1.Value == 0 || elevator2_passengers.Count==elevators_Capasity || 
+                        elevators_direction[1]==false || (elevators_direction[1]==true && trackBar2.Value<trackBar1.Value))))
+                    //|| (elevators_direction[0] == false && landing_1 == true && debil % 5 == 0 )
+                    {//|| elevator1_passengers.Count==0
                         boarding_1();
                         boarding_state_1 = true;
 
@@ -339,7 +622,7 @@ namespace Elevators_koursach
                 }
 
 
-                if (boarding_state_1 == false && landing_1 == false)//elevator1 moving
+                if (boarding_state_1 == false && landing_1 == false && moving)//elevator1 moving
                 {
                     if (trackBar1.Value == floors - 1) elevators_direction[0] = true;
                     else
@@ -354,16 +637,181 @@ namespace Elevators_koursach
                         trackBar1.Value--;
 
                 }
+                moving = true;
 
-                if (elevator2_passengers.Count == 0 && calls.Count > 0)
+                if (elevator2_passengers.Count == 0 )
                 {
-                    if (elevator1_passengers.Count != 0)
+                    if (calls.Count > 0)
                     {
-                        if (calls[0] < trackBar2.Value)
+
+
+                        if (special_calls.Count > 1 && elevator1_passengers.Count == 0)
+                        {
+                            special_moving_2 = true;
+                            if (special_call_for_el2 == 0 && special_calls[1] != 0)
+                            {
+                                special_call_for_el2 = special_calls[1];
+                            }
+                            else
+                            {
+                                label13.Text+=Convert.ToString(special_call_for_el2);
+                                if (special_call_for_el2 < trackBar2.Value )
+                                    elevators_direction[1] = true;
+                                else
+                                {
+                                    if (special_call_for_el2 > trackBar2.Value )
+                                        elevators_direction[1] = false;
+                                    else
+                                    {
+                                        label13.Text += "!";
+                                        boarding_2();
+                                        boarding_state_2 = true;
+                                        special_moving_2 = false;
+                                        special_call_for_el2 = 0;
+                                    }
+                                }
+                            }
+                        }
+                        else
+                        {
+                            if (special_calls.Count > 0 && elevator1_passengers.Count != 0)
+                            {
+                                special_moving_2 = true;
+                                special_call_already_accept = true;
+                                if (special_call_for_el2 == 0 && special_calls[0] != 0)
+                                {
+                                    special_call_for_el2 = special_calls[0];
+                                }
+                                else
+                                {
+                                    
+                                    if (special_call_for_el2 < trackBar2.Value )
+                                        elevators_direction[1] = true;
+                                    else
+                                    {
+                                        if (special_call_for_el2 > trackBar2.Value)
+                                            elevators_direction[1] = false;
+                                        else
+                                        {
+                                            label13.Text += "!";
+                                            boarding_2();
+                                            boarding_state_2 = true;
+                                            special_moving_2 = false;
+                                            special_call_already_accept=false;
+                                            special_call_for_el2 = 0;
+                                        }
+                                    }
+                                }
+                            }
+                            else
+                            {
+
+                                if (calls_el2.Count == 0)
+                                {
+
+                                    calls_el2.Add(calls[0]);
+                                    label11.Text = Convert.ToString(calls[0]) + " ";
+                                    calls.RemoveAt(0);
+                                    if (calls.Count > 1)
+                                    {
+                                        calls_el2.Add(calls[0]);
+                                        label11.Text += Convert.ToString(calls[0]) + " ";
+                                        calls.RemoveAt(0);
+                                        if (calls.Count > 2)
+                                        {
+                                            calls_el2.Add(calls[0]);
+                                            label11.Text += Convert.ToString(calls[0]) + " ";
+                                            calls.RemoveAt(0);
+                                        }
+                                    }
+
+
+                                }
+                                else//обновление вызовов
+                                {
+                                    if (calls_el1.Count > 0)
+                                    {
+
+                                        if ((Math.Abs(calls_el1[0] - trackBar2.Value) < Math.Abs(calls_el1[0] - trackBar1.Value)) && (Math.Abs(calls_el1[0] - trackBar2.Value) < Math.Abs(calls_el2[0] - trackBar2.Value)) && !change)
+                                        {
+                                            List<int> cross = new List<int>(calls_el1);
+                                            calls_el1 = new List<int>(calls_el2);
+                                            calls_el2 = new List<int>(cross);
+                                        }
+                                    }
+
+                                    if (elevators_direction[1] == false)
+                                    {
+                                        int cntr = 0;
+                                        int marker_2 = calls_el2[0];
+                                        while (marker_2 < calls[0])
+                                        {
+
+                                            calls_el2.Insert(0, calls[0]);
+                                            calls.RemoveAt(0);
+                                            if (calls_el2.Count == 4)
+                                            {
+                                                calls.Add(calls_el2[calls_el2.Count - 1]);
+                                                calls_el2.RemoveAt(calls_el2.Count - 1);
+                                            }
+                                            cntr++;
+                                            if (cntr == 3 || calls.Count == 0)
+                                                break;
+
+
+                                        }
+
+
+                                    }
+                                    else
+                                    {
+                                        for (int i = 0; i < calls.Count; i++)
+                                        {
+                                            if (calls[i] < trackBar2.Value + 1)
+                                            {
+                                                int cntr = 0;
+                                                int marker_2 = calls_el2[0];
+                                                while (marker_2 < calls[i])
+                                                {
+
+                                                    calls_el2.Insert(0, calls[i]);
+                                                    calls.RemoveAt(i);
+                                                    if (calls_el2.Count == 4)
+                                                    {
+                                                        calls.Add(calls_el2[calls_el2.Count - 1]);
+                                                        calls_el2.RemoveAt(calls_el2.Count - 1);
+                                                    }
+                                                    cntr++;
+                                                    if (cntr == 3 || calls.Count == i)
+                                                        break;
+
+
+                                                }
+                                                break;
+                                            }
+                                        }
+                                    }
+                                    listFromMaxToMin(calls_el2);
+                                    listFromMaxToMin(calls);
+
+                                    //label11.Text = " ";
+                                    //for (int i = 0; i < calls_el2.Count; i++)
+                                    //    label11.Text += Convert.ToString(calls_el2[i]) + " ";
+
+
+                                }
+
+
+                            }
+                        }
+                    }
+                    if (calls_el2.Count > 0 && !special_moving_2)
+                    {
+                        if (calls_el2[0] < trackBar2.Value)
                             elevators_direction[1] = true;
                         else
                         {
-                            if (calls[0] > trackBar2.Value)
+                            if (calls_el2[0] > trackBar2.Value)
                                 elevators_direction[1] = false;
                             else
                             {
@@ -372,27 +820,11 @@ namespace Elevators_koursach
                             }
                         }
                     }
-                    else
-                    {
-                        if (calls.Count > 1)
-                        {
-                            if (calls[1] < trackBar2.Value)
-                                elevators_direction[1] = true;
-                            else
-                            {
-                                if (calls[1] > trackBar2.Value)
-                                    elevators_direction[1] = false;
-                                else
-                                {
-                                    boarding_2();
-                                    boarding_state_2 = true;
-                                }
-                            }
-                        }
-                    }
                 }
                 else
                 {
+                    if (elevator2_passengers.Count == 0)
+                        moving =false;
                     label8.Text = "";
                     if (elevator2_passengers.Contains(trackBar2.Value + 1))
                     {
@@ -410,10 +842,12 @@ namespace Elevators_koursach
 
                     }
 
-                    int debil = rand.Next(1, 6);
-                    if (button_state[trackBar2.Value] == true && (elevator2_passengers.Count < elevators_Capasity)
-                        && (elevators_direction[1] == true || (elevators_direction[1] == false && landing_2 == true && (debil % 5 == 0 || elevator2_passengers.Count==0))))
-                    {
+                    //int debil = rand.Next(1, 6);
+                    if (floor_button[trackBar2.Value].State == true && (elevator2_passengers.Count < elevators_Capasity)
+                        && (elevators_direction[1] == true && (calls_el1.Contains(trackBar2.Value) == false || trackBar2.Value == 0 || elevator1_passengers.Count == elevators_Capasity ||
+                        elevators_direction[0] == false || (elevators_direction[0] == true && trackBar1.Value < trackBar2.Value))))
+                    //(elevators_direction[1] == false && landing_2 == true && debil % 5 == 0 )
+                    {//|| elevator2_passengers.Count==0)
                         //if((trackBar1.Value == trackBar2.Value) && (landing_1 == true) && (landing_2==false))
                         boarding_2();
                         boarding_state_2 = true;
@@ -443,7 +877,7 @@ namespace Elevators_koursach
                     summ_waiting_time = 0;
                 }
 
-                if (boarding_state_2 == false && landing_2 == false)//elevator2 moving
+                if (boarding_state_2 == false && landing_2 == false && moving)//elevator2 moving
                 {
                     if (trackBar2.Value == floors - 1) elevators_direction[1] = true;
                     else
@@ -457,6 +891,7 @@ namespace Elevators_koursach
                     else
                         trackBar2.Value--;
                 }
+                moving = true;
 
 
                 label2.Text = Convert.ToString(trackBar1.Value + 1);
@@ -484,8 +919,16 @@ namespace Elevators_koursach
 
                 awaitings[trackBar1.Value].RemoveAt(0);
             }
-            button_state[trackBar1.Value] = false;
-            calls.Remove(trackBar1.Value);
+            floor_button[trackBar1.Value].State = false;
+            floor_button[trackBar1.Value].State_true_time = 0;
+            if (calls.Contains(trackBar1.Value)) 
+                calls.Remove(trackBar1.Value); 
+            if (calls_el1.Contains(trackBar1.Value))
+                calls_el1.Remove(trackBar1.Value);
+            if (calls_el2.Contains(trackBar1.Value))
+                calls_el2.Remove(trackBar1.Value);
+            if (special_calls.Contains(trackBar1.Value))
+                special_calls.Remove(trackBar1.Value);
 
             passengers_Update_1(checker);
 
@@ -512,9 +955,18 @@ namespace Elevators_koursach
 
                 awaitings[trackBar2.Value].RemoveAt(0);
             }
-            button_state[trackBar2.Value] = false;
-            calls.Remove(trackBar2.Value);
+            floor_button[trackBar2.Value].State = false;
+            floor_button[trackBar2.Value].State_true_time = 0;
 
+            if (calls.Contains(trackBar2.Value)) 
+                calls.Remove(trackBar2.Value);
+            if (calls_el1.Contains(trackBar2.Value))
+                calls_el1.Remove(trackBar2.Value);
+            if (calls_el2.Contains(trackBar2.Value))
+                calls_el2.Remove(trackBar2.Value);
+            if(special_calls.Contains(trackBar2.Value))
+                special_calls.Remove(trackBar2.Value);
+           
             passengers_Update_2(checker);
 
 
@@ -556,6 +1008,22 @@ namespace Elevators_koursach
                 elevators_direction[1] = true;
         }
 
+        void listFromMaxToMin(List<int> callers)
+        {
+            for (int i = 0; i < callers.Count - 1; i++)
+            {
+                for (int j = i + 1; j < callers.Count; j++)
+                {
+                    if (callers[j] > callers[i])
+                    {
+                        int x = callers[i];
+                        callers[i] = callers[j];
+                        callers[j] = x;
+                    }
+                }
+            }
+        }
+
         private void trackBar1_Scroll(object sender, EventArgs e)
         {
 
@@ -567,8 +1035,18 @@ namespace Elevators_koursach
             generation_stopped = true;
             timer1.Stop();
             label1.Text = "Новые пассажиры:\r\nГенерация остановлена";
-            while (button_state.Contains(true) == true)
+            bool time_to_stop = false; 
+            while (!time_to_stop)
             {
+                time_to_stop = true;
+                for(int i = 0; i < floor_button.Count; i++)
+                {
+                    if (floor_button[i].State == true)
+                    {
+                        time_to_stop = false;
+                        break;
+                    }
+                }
                 await Task.Delay(2000);
             }
             timer2.Stop();
@@ -595,9 +1073,16 @@ namespace Elevators_koursach
             
         }
 
-    
-    
-    
+    public class Button
+    {
+        public Button(bool state, uint  state_true_time)
+        {
+            State = state;
+            State_true_time = state_true_time;
+        }
 
+        public bool State { get; set; }
+        public uint State_true_time { get; set; }   
+    }
 
 }
